@@ -1,6 +1,6 @@
 import { Context, Next } from "hono";
 import { auth } from "shared/auth";
-import { logger, serializeError } from "@openinary/core";
+import { isDownloadOnlyExt, logger, serializeError } from "@openinary/core";
 
 // Define the variables that will be available in the context
 export type AuthVariables = {
@@ -211,4 +211,26 @@ export async function apiKeyAuth(c: Context<AuthVariables>, next: Next) {
     },
     401,
   );
+}
+
+/**
+ * Public delivery routes (/t, /download) stay public for everything except
+ * encrypted (.enc) files: those are only served to a valid API key or session.
+ * Ciphertext is useless without the client's key, but it should not be
+ * downloadable by anyone who learns a path either.
+ */
+export async function encryptedFileAuth(c: Context<AuthVariables>, next: Next) {
+  let requestPath: string;
+  try {
+    requestPath = decodeURIComponent(c.req.path);
+  } catch {
+    requestPath = c.req.path;
+  }
+
+  if (!isDownloadOnlyExt(requestPath.split(".").pop())) {
+    await next();
+    return;
+  }
+
+  return apiKeyAuth(c, next);
 }

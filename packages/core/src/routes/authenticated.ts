@@ -8,7 +8,7 @@ import {
   sanitizeFilePath,
 } from "../utils/signature";
 import { isTransformSegment } from "../utils/parser";
-import { contentTypeForExt } from "../utils/upload-validation";
+import { contentTypeForExt, isDownloadOnlyExt } from "../utils/upload-validation";
 
 // Get API_SECRET from environment variables
 const API_SECRET = process.env.API_SECRET;
@@ -136,6 +136,14 @@ export function createAuthenticatedRoute(deps: RouteDeps) {
       // allowed to become HTML in the browser. The signature gates who can
       // request a URL, not what the stored bytes are.
       c.header("X-Content-Type-Options", "nosniff");
+
+      // Encrypted (.enc) bytes are opaque to us: never let the browser try to
+      // render them, only save them. Delivery requires an API key, so the
+      // response must not be kept by a shared cache and replayed without one.
+      if (isDownloadOnlyExt(sanitizedFilePath.split(".").pop())) {
+        c.header("Content-Disposition", "attachment");
+        c.header("Cache-Control", "private, no-store");
+      }
 
       // Determine content type if not set in headers. Falls back to the shared
       // media-type table rather than a local map, so an extension can never be

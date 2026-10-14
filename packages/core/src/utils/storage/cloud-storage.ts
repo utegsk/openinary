@@ -1,6 +1,6 @@
 import { StorageConfig, StorageClientOptions } from "./types";
 import { StorageCache } from "./cache";
-import { KeyGenerator } from "./key-generator";
+import { KeyGenerator, LEGACY_CACHE_KEY } from "./key-generator";
 import { S3ClientWrapper } from "./s3-client";
 import logger, { serializeError } from "../logger";
 import {
@@ -162,6 +162,11 @@ export class CloudStorage implements StatsBackend {
       await this.s3Client.deleteObject(obj.key);
     }
 
+    // Variants are keyed by path: the old ones can never be served again
+    await this.bestEffortCacheCleanup(normalizedOld, () =>
+      this.deleteCachedFolder(normalizedOld),
+    );
+
     this.cache.delete(`original:${normalizedOld}`);
   }
 
@@ -194,6 +199,10 @@ export class CloudStorage implements StatsBackend {
         fileCount: -deletedFiles,
       });
     }
+
+    await this.bestEffortCacheCleanup(normalized, () =>
+      this.deleteCachedFolder(normalized),
+    );
 
     // Invalidate in-memory cache for all deleted keys
     this.cache.delete(`original:${normalized}`);
@@ -460,6 +469,9 @@ export class CloudStorage implements StatsBackend {
   async renameOriginal(sourcePath: string, destPath: string): Promise<void> {
     await this.copyOriginal(sourcePath, destPath);
     await this.deleteOriginal(sourcePath);
+    await this.bestEffortCacheCleanup(sourcePath, () =>
+      this.deleteAllCachedTransformations(sourcePath),
+    );
   }
 
   /**
@@ -514,58 +526,26 @@ export class CloudStorage implements StatsBackend {
   }
 
   /**
-   * Deletes all cached transformations for an original file from cloud storage
-   * Uses metadata to identify files belonging to the original path
+   * Deletes all cached transformations for an original file from cloud storage.
+   * Variants live under `cache/{originalPath}/` (see KeyGenerator), so one
+   * prefix listing finds them - no per-object metadata reads.
    */
   async deleteAllCachedTransformations(originalPath: string): Promise<number> {
     try {
-      // List all objects with cache/ prefix
-      const cacheObjects = await this.s3Client.listObjects("cache/");
-
-      const keysToDelete: string[] = [];
-      let sizeToDelete = 0;
-
-      // Check each object's metadata to see if it belongs to this original path
-      for (const obj of cacheObjects) {
-        try {
-          const metadata = await this.s3Client.getObjectMetadata(obj.key);
-          if (
-            metadata?.metadata?.["x-original-path"] ===
-            encodeURIComponent(originalPath)
-          ) {
-            keysToDelete.push(obj.key);
-            sizeToDelete += obj.size ?? 0;
-          }
-        } catch (error) {
-          // If we can't get metadata, skip this object
-          logger.warn(
-            { error: serializeError(error), key: obj.key },
-            "Failed to get metadata for cache object",
-          );
-        }
-      }
-
-      if (keysToDelete.length === 0) {
-        logger.debug(
-          { originalPath },
-          "No cached transformations found in cloud storage",
-        );
-        return 0;
-      }
-
-      // Delete all identified objects
-      const deletedCount = await this.s3Client.deleteObjects(keysToDelete);
-
-      adjustBucketStats(this, "cache", {
-        size: -sizeToDelete,
-        fileCount: -keysToDelete.length,
-      });
-
-      logger.info(
-        { originalPath, deletedCount, totalFound: keysToDelete.length },
-        "Deleted cached transformations from cloud storage",
+      const listed = await this.s3Client.listObjects(
+        KeyGenerator.variantsPrefix(originalPath),
       );
+      const variants = listed.filter((obj) =>
+        KeyGenerator.isVariantOf(originalPath, obj.key),
+      );
+      const deletedCount = await this.deleteCacheObjects(variants);
 
+      if (deletedCount > 0) {
+        logger.info(
+          { originalPath, deletedCount },
+          "Deleted cached transformations from cloud storage",
+        );
+      }
       return deletedCount;
     } catch (error) {
       logger.error(
@@ -573,6 +553,69 @@ export class CloudStorage implements StatsBackend {
         "Failed to delete cached transformations",
       );
       throw error;
+    }
+  }
+
+  /**
+   * Deletes the cached variants of every file under a folder - the whole
+   * `cache/{folderPath}/` subtree.
+   */
+  private async deleteCachedFolder(folderPath: string): Promise<number> {
+    const objects = await this.s3Client.listObjects(
+      KeyGenerator.variantsPrefix(folderPath),
+    );
+    return this.deleteCacheObjects(objects);
+  }
+
+  private async deleteCacheObjects(
+    objects: { key: string; size?: number }[],
+  ): Promise<number> {
+    if (objects.length === 0) {
+      return 0;
+    }
+    const deletedCount = await this.s3Client.deleteObjects(
+      objects.map((obj) => obj.key),
+    );
+    adjustBucketStats(this, "cache", {
+      size: -objects.reduce((sum, obj) => sum + (obj.size ?? 0), 0),
+      fileCount: -objects.length,
+    });
+    return deletedCount;
+  }
+
+  /**
+   * Finds - and unless dryRun, deletes - cache objects in the pre-grouping flat
+   * layout (`cache/{md5}.{ext}`). Nothing reads them any more, so they are
+   * pure leftovers after an upgrade. One full listing of cache/, run once.
+   */
+  async deleteLegacyCache(
+    dryRun: boolean,
+  ): Promise<{ count: number; size: number }> {
+    const legacy = (await this.s3Client.listObjects("cache/")).filter((obj) =>
+      LEGACY_CACHE_KEY.test(obj.key),
+    );
+    const size = legacy.reduce((sum, obj) => sum + (obj.size ?? 0), 0);
+    if (!dryRun) {
+      await this.deleteCacheObjects(legacy);
+    }
+    return { count: legacy.length, size };
+  }
+
+  /**
+   * Cache cleanup that must never fail the operation that triggered it: a
+   * leftover variant only wastes space, a failed rename or delete loses work.
+   */
+  private async bestEffortCacheCleanup(
+    what: string,
+    cleanup: () => Promise<number>,
+  ): Promise<void> {
+    try {
+      await cleanup();
+    } catch (error) {
+      logger.warn(
+        { error: serializeError(error), what },
+        "Failed to clean up cached variants",
+      );
     }
   }
 

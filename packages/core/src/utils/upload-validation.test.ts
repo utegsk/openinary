@@ -4,6 +4,9 @@ import {
   ALLOWED_UPLOAD_TYPES,
   allowedUploadExtensions,
   contentTypeForExt,
+  ENCRYPTED_FILE_MARKER,
+  isDownloadOnlyExt,
+  isOriginalOnlyExt,
   stripUrlHostile,
   validateUploadContent,
   validateUploadFileType,
@@ -83,6 +86,15 @@ test("accepts audio and 3D uploads with the MIME variants browsers send", () => 
   assert.ok(validateUploadFileType("scene.gltf", "model/gltf+json"));
 });
 
+test("accepts pdf uploads", () => {
+  assert.ok(validateUploadFileType("contract.pdf", "application/pdf"));
+  assert.ok(validateUploadFileType("CONTRACT.PDF", "application/pdf"));
+  assert.ok(!validateUploadFileType("contract.pdf", "application/octet-stream"));
+  assert.ok(!validateUploadFileType("contract.html", "application/pdf"));
+  assert.equal(contentTypeForExt("pdf"), "application/pdf");
+  assert.ok(allowedUploadExtensions().includes("pdf"));
+});
+
 test("still rejects disallowed types and ext/MIME mismatches", () => {
   assert.ok(!validateUploadFileType("evil.svg", "image/svg+xml"));
   assert.ok(!validateUploadFileType("clip.wav", "video/mp4"));
@@ -92,11 +104,12 @@ test("the existing image/video whitelist is preserved", () => {
   assert.deepEqual(ALLOWED_UPLOAD_TYPES["image/jpeg"], [".jpg", ".jpeg"]);
   assert.deepEqual(ALLOWED_UPLOAD_TYPES["image/heic"], [".heic", ".heif"]);
   assert.deepEqual(ALLOWED_UPLOAD_TYPES["video/mp4"], [".mp4"]);
-  // octet-stream now covers psd + the new 3D types
+  // octet-stream now covers psd + the 3D types + encrypted files
   assert.deepEqual(ALLOWED_UPLOAD_TYPES["application/octet-stream"], [
     ".psd",
     ".glb",
     ".gltf",
+    ".enc",
   ]);
 });
 
@@ -141,6 +154,7 @@ test("accepts files whose bytes match the extension", () => {
   assert.ok(validateUploadContent("pic.webp", body("RIFF\x00\x00\x00\x00WEBP")));
   assert.ok(validateUploadContent("clip.mp4", body("\x00\x00\x00\x20ftypisom")));
   assert.ok(validateUploadContent("clip.webm", body("\x1a\x45\xdf\xa3")));
+  assert.ok(validateUploadContent("contract.pdf", body("%PDF-1.7\n%\xe2\xe3")));
 });
 
 test("rejects a payload renamed to an allowed extension", () => {
@@ -153,6 +167,7 @@ test("rejects a payload renamed to an allowed extension", () => {
   assert.ok(!validateUploadContent("evil.psd", body("#!/bin/sh\n")));
   assert.ok(!validateUploadContent("evil.mp4", body("<!DOCTYPE html>")));
   assert.ok(!validateUploadContent("evil.png", body("\xff\xd8\xff"))); // jpeg as png
+  assert.ok(!validateUploadContent("evil.pdf", body("<html><body>")));
 });
 
 test("a QuickTime .mov that does not open on ftyp is still accepted", () => {
@@ -185,4 +200,38 @@ test("an extension with no signature is left to the whitelist", () => {
   // validateUploadFileType already rejects these; content check must not be the
   // thing that decides, or a newly whitelisted type would silently 400.
   assert.ok(validateUploadContent("notes.txt", body("hello")));
+});
+
+test("encrypted files are accepted only with the marker, and only as downloads", () => {
+  assert.ok(validateUploadFileType("contract.pdf.enc", "application/octet-stream"));
+  assert.ok(!validateUploadFileType("contract.pdf.enc", "application/pdf"));
+  assert.equal(contentTypeForExt("enc"), "application/octet-stream");
+
+  const ciphertext = Buffer.from([0x8f, 0x12, 0xa0, 0x00, 0x77, 0xfe]);
+  assert.ok(
+    validateUploadContent(
+      "contract.pdf.enc",
+      Buffer.concat([Buffer.from(ENCRYPTED_FILE_MARKER, "latin1"), ciphertext]),
+    ),
+  );
+  // bare ciphertext, markup or a plain pdf renamed to .enc are all rejected
+  assert.ok(!validateUploadContent("contract.pdf.enc", ciphertext));
+  assert.ok(!validateUploadContent("evil.enc", body("<html><body>")));
+  assert.ok(!validateUploadContent("plain.pdf.enc", body("%PDF-1.7")));
+
+  assert.ok(isDownloadOnlyExt("enc"));
+  assert.ok(isDownloadOnlyExt("ENC"));
+  for (const e of ["pdf", "jpg", "mp4", "glb", undefined, "xyz"]) {
+    assert.ok(!isDownloadOnlyExt(e), `${e} should render inline`);
+  }
+});
+
+test("only known non-image, non-video types are original-only", () => {
+  for (const e of ["pdf", "enc", "ENC", "mp3", "wav", "ogg", "glb", "gltf"]) {
+    assert.ok(isOriginalOnlyExt(e), `${e} is never transformed`);
+  }
+  // transformable types, and anything unknown, keep the cached-variant cleanup
+  for (const e of ["jpg", "png", "webp", "gif", "psd", "heic", "mp4", "mov", "webm", "xyz", "", undefined]) {
+    assert.ok(!isOriginalOnlyExt(e), `${e} may have cached variants`);
+  }
 });

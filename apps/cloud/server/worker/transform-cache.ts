@@ -445,7 +445,7 @@ export const ALLOWED_UPLOAD_TYPES: Readonly<Record<string, readonly string[]>> =
     "image/heic": [".heic", ".heif"],
     "image/heif": [".heic", ".heif"],
     "image/vnd.adobe.photoshop": [".psd"],
-    "application/octet-stream": [".psd", ".glb", ".gltf"],
+    "application/octet-stream": [".psd", ".glb", ".gltf", ".enc"],
     // Videos
     "video/mp4": [".mp4"],
     "video/quicktime": [".mov"],
@@ -459,6 +459,8 @@ export const ALLOWED_UPLOAD_TYPES: Readonly<Record<string, readonly string[]>> =
     // 3D
     "model/gltf-binary": [".glb"],
     "model/gltf+json": [".gltf"],
+    // Documents
+    "application/pdf": [".pdf"],
   };
 
 export function validateUploadFileType(

@@ -98,12 +98,16 @@ Videos also apply fixed limits: 720p maximum when you request no explicit `w` or
 
 ## Pass-through formats
 
-Audio and 3D files are stored and delivered, never transformed. Request them with no transformation segment and the stored bytes come back untouched, as in `GET /t/audio/podcast.mp3` or `GET /t/models/duck.glb`.
+Audio, 3D and PDF files are stored and delivered, never transformed. Request them with no transformation segment and the stored bytes come back untouched, as in `GET /t/audio/podcast.mp3`, `GET /t/models/duck.glb` or `GET /t/docs/contract.pdf`.
 
 | Kind | Extensions |
 | --- | --- |
 | Audio | `wav` `mp3` `ogg` |
 | 3D | `glb` `gltf` |
+| Document | `pdf` |
+| Encrypted | `enc` |
+
+Encrypted files (`enc`) are ciphertext produced by your application. Openinary never decrypts them: they are delivered as `application/octet-stream` with `Content-Disposition: attachment` and `Cache-Control: private, no-store`, and only to a request carrying a valid API key (`Authorization: Bearer <key>`) or dashboard session. Without one, `/t/` and `/download/` answer `401`, and folder ZIPs leave them out.
 
 Adding parameters to one returns `400` rather than the original, so a "resized" variant that is really the untouched file never gets cached.
 

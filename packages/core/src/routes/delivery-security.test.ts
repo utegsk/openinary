@@ -84,6 +84,38 @@ test("the content-type fallback uses the shared media table", async () => {
   assert.equal(unknown.get("content-type"), "application/octet-stream");
 });
 
+test("an encrypted original is a private download, never rendered or cached", async () => {
+  const headers = await headersFor(
+    {
+      stream: new ReadableStream<Uint8Array>({
+        start(c) {
+          c.enqueue(new Uint8Array([0, 1, 2]));
+          c.close();
+        },
+      }),
+      contentType: "application/octet-stream",
+      headers: { "Cache-Control": "public, max-age=31536000, must-revalidate" },
+    },
+    "/t/docs/contract.pdf.enc",
+  );
+
+  assert.equal(headers.get("content-disposition"), "attachment");
+  assert.equal(headers.get("cache-control"), "private, no-store");
+  assert.equal(headers.get("x-content-type-options"), "nosniff");
+
+  // everything else keeps its normal, cacheable inline delivery
+  const pdf = await headersFor(
+    {
+      buffer: Buffer.from("%PDF-"),
+      contentType: "application/pdf",
+      headers: { "Cache-Control": "public, max-age=31536000, must-revalidate" },
+    },
+    "/t/docs/contract.pdf",
+  );
+  assert.equal(pdf.get("content-disposition"), null);
+  assert.match(pdf.get("cache-control") ?? "", /public/);
+});
+
 // The authenticated route serves the same TransformService results as /t/,
 // just gated by a signature. The gate decides who can request a URL, not what
 // the stored bytes are, so it needs the exact same nosniff + shared-table

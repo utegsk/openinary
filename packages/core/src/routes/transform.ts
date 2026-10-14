@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { TransformService } from "../services/transform.service";
 import type { RouteDeps } from "../config/deps";
 import { remoteSourceUrl } from "./transform-helpers";
-import { contentTypeForExt } from "../utils/upload-validation";
+import { contentTypeForExt, isDownloadOnlyExt } from "../utils/upload-validation";
 import logger, { serializeError } from "../utils/logger";
 
 export function createTransformRoute(deps: RouteDeps) {
@@ -50,6 +50,14 @@ export function createTransformRoute(deps: RouteDeps) {
       // transformed ones are re-encoded and safe already, but the header costs
       // nothing and this way no delivery path is left uncovered.
       c.header("X-Content-Type-Options", "nosniff");
+
+      // Encrypted (.enc) bytes are opaque to us: never let the browser try to
+      // render them, only save them. Delivery requires an API key, so the
+      // response must not be kept by a shared cache and replayed without one.
+      if (isDownloadOnlyExt(path.split(".").pop())) {
+        c.header("Content-Disposition", "attachment");
+        c.header("Cache-Control", "private, no-store");
+      }
 
       // Determine content type if not set in headers. Falls back to the shared
       // media-type table rather than a local map, so an extension can never be

@@ -8,8 +8,9 @@ import path from "path";
  *
  * Consumed by the OSS API and the SaaS so their whitelists cannot diverge.
  * Deliberately excludes svg (stored-XSS vector when served inline). Images and
- * videos go through the transform pipeline; audio and 3D are stored and served
- * as opaque originals (no transform pipeline).
+ * videos go through the transform pipeline; audio, 3D and documents (pdf) are
+ * stored and served as opaque originals (no transform pipeline). Encrypted
+ * files (enc) are opaque too, and are only ever served as a download.
  */
 interface MediaType {
   /** canonical extension, no dot, lowercase */
@@ -25,6 +26,11 @@ interface MediaType {
    * client-controlled, so this is the only check an attacker cannot simply set.
    */
   matches: (head: Buffer) => boolean;
+  /**
+   * Never rendered by the browser: delivered with Content-Disposition:
+   * attachment. For bytes Openinary cannot vouch for (ciphertext).
+   */
+  downloadOnly?: boolean;
 }
 
 /** ASCII marker at a fixed offset, e.g. "RIFF" at 0 or "ftyp" at 4. */
@@ -60,6 +66,14 @@ const jsonObject = (head: Buffer): boolean => {
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // strip BOM
   return text.trimStart().startsWith("{");
 };
+
+/**
+ * Prefix every encrypted (.enc) upload must start with, followed by the
+ * ciphertext. Ciphertext has no signature of its own, so without a marker the
+ * content check could not tell an encrypted file from any other payload
+ * renamed to .enc. The client adds it before upload and strips it on read.
+ */
+export const ENCRYPTED_FILE_MARKER = "OPNENC1\0";
 
 const MEDIA_TYPES: readonly MediaType[] = [
   // Images
@@ -105,6 +119,14 @@ const MEDIA_TYPES: readonly MediaType[] = [
   { ext: "gltf", contentType: "model/gltf+json",
     uploadMimes: ["model/gltf+json", "application/octet-stream"],
     matches: jsonObject },
+  // Documents (stored + delivered as originals)
+  { ext: "pdf", contentType: "application/pdf", uploadMimes: ["application/pdf"],
+    matches: (h) => marker(h, 0, "%PDF-") },
+  // Encrypted files: ciphertext encrypted by the client, stored and delivered
+  // untouched. Openinary never decrypts or inspects it beyond the marker.
+  { ext: "enc", contentType: "application/octet-stream",
+    uploadMimes: ["application/octet-stream"], downloadOnly: true,
+    matches: (h) => marker(h, 0, ENCRYPTED_FILE_MARKER) },
 ];
 
 const CONTENT_TYPE_BY_EXT: Readonly<Record<string, string>> = Object.fromEntries(
@@ -173,11 +195,34 @@ const TYPE_BY_EXT: ReadonlyMap<string, MediaType> = new Map(
 );
 
 /**
+ * Whether files of this extension are only ever stored and served as originals:
+ * a known type that is neither an image nor a video (pdf, enc, audio, 3D). Such
+ * files never get transformed, so they never have cached variants. Unknown or
+ * missing extensions return false, so callers fall back to the safe path.
+ */
+export function isOriginalOnlyExt(ext: string | undefined): boolean {
+  const type = ext ? TYPE_BY_EXT.get(ext.toLowerCase()) : undefined;
+  return (
+    !!type &&
+    !type.contentType.startsWith("image/") &&
+    !type.contentType.startsWith("video/")
+  );
+}
+
+/**
+ * Whether a stored file of this extension must only be served as a download
+ * (Content-Disposition: attachment), never rendered inline.
+ */
+export function isDownloadOnlyExt(ext: string | undefined): boolean {
+  return !!ext && !!TYPE_BY_EXT.get(ext.toLowerCase())?.downloadOnly;
+}
+
+/**
  * Checks the file's own bytes against the type its name claims.
  *
  * The MIME type and the extension are both set by whoever is uploading, so on
  * their own they stop a mistake, not an attacker: anything can be named
- * `.glb` and sent as `application/octet-stream`. Stored originals (audio, 3D)
+ * `.glb` and sent as `application/octet-stream`. Stored originals (audio, 3D, pdf)
  * are served back untouched, so nothing downstream would notice the mismatch -
  * images and videos only get caught today because the transform pipeline
  * re-encodes them.

@@ -60,6 +60,8 @@ export {
   validateUploadContent,
   contentTypeForExt,
   allowedUploadExtensions,
+  isDownloadOnlyExt,
+  ENCRYPTED_FILE_MARKER,
 } from "./utils/upload-validation";
 export { deleteAssetCompletely, type DeleteAssetResult } from "./utils/asset-deletion";
 export { default as logger, serializeError } from "./utils/logger";

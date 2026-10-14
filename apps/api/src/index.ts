@@ -20,7 +20,7 @@ import {
 import { createUploadRoute } from "./routes/upload";
 import apiKeys from "./routes/api-keys";
 import health from "./routes/health";
-import { apiKeyAuth } from "./middleware/auth";
+import { apiKeyAuth, encryptedFileAuth } from "./middleware/auth";
 import { publicRateLimit } from "./middleware/rate-limit";
 import { getSharedStorage } from "./config/storage";
 import { videoJobQueue } from "./config/queue";
@@ -111,11 +111,13 @@ app.route("/video-status", videoStatus);
 // Image transformation route is public for easy access to transformed images
 app.use("/t", publicRateLimit);
 app.use("/t/*", publicRateLimit);
+app.use("/t/*", encryptedFileAuth);
 app.route("/t", transform);
 
 // Original file download route (public, consistent with /t/)
 app.use("/download", publicRateLimit);
 app.use("/download/*", publicRateLimit);
+app.use("/download/*", encryptedFileAuth);
 app.route("/download", download);
 
 // Folder ZIP download route (public)

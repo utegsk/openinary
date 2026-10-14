@@ -27,7 +27,9 @@ curl -X POST http://localhost:3000/upload \
 | `names`           | `string[]` | Custom filenames, in the same order as `files`. Must include the extension. Defaults to the original filename      |
 | `transformations` | `string[]` | Transformation segments to prewarm immediately after upload (`w_800,h_600,c_fill`), up to 20 variants. Self-hosted only: Cloud ignores this field and generates variants on first request |
 
-**Allowed types:** JPEG, PNG, WebP, AVIF, GIF, HEIC/HEIF, PSD, MP4, MOV, WebM, WAV, MP3, OGG, GLB, glTF
+**Allowed types:** JPEG, PNG, WebP, AVIF, GIF, HEIC/HEIF, PSD, MP4, MOV, WebM, WAV, MP3, OGG, GLB, glTF, PDF, encrypted files (`.enc`)
+
+**Encrypted files:** encrypt on your side, prefix the ciphertext with the 8-byte marker `OPNENC1\0`, and upload it as `application/octet-stream` with a `.enc` name (e.g. `contract.pdf.enc`). The marker is checked like any other file signature; strip it again after downloading. See [pass-through formats](/api-reference/media/transform#pass-through-formats) for how they are delivered.
 
 **Max size per file:** configurable via `MAX_FILE_SIZE_MB`, default 50 MB
 

@@ -4,6 +4,12 @@ import { zipSync, strToU8 } from "fflate";
 import fs from "fs";
 import path from "path";
 import logger, { serializeError } from "../utils/logger";
+import { isDownloadOnlyExt } from "../utils/upload-validation";
+
+// Encrypted (.enc) files need an API key to download one by one; this route
+// is public, so they are never bundled into a folder ZIP.
+const isZippable = (name: string): boolean =>
+  !isDownloadOnlyExt(name.split(".").pop());
 
 function collectLocalFiles(
   dir: string,
@@ -74,6 +80,7 @@ export function createDownloadFolderRoute(deps: RouteDeps) {
           const relPath = obj.key.replace(`public/${folderPath}/`, "");
           // Skip folder marker objects (empty keys or keys ending in /)
           if (!relPath || relPath.endsWith("/")) continue;
+          if (!isZippable(relPath)) continue;
 
           const buffer = await storage.downloadOriginal(
             `${folderPath}/${relPath}`,
@@ -87,7 +94,9 @@ export function createDownloadFolderRoute(deps: RouteDeps) {
           return c.text("Folder not found", 404);
         }
 
-        const entries = collectLocalFiles(localDir, "");
+        const entries = collectLocalFiles(localDir, "").filter((e) =>
+          isZippable(e.arcPath),
+        );
         if (entries.length === 0) {
           return c.text("Folder is empty", 404);
         }

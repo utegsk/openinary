@@ -3,6 +3,7 @@ import path from "path";
 import logger, { serializeError } from "./logger";
 import { CloudStorage } from "./storage/cloud-storage";
 import { deleteCachedFiles } from "./cache";
+import { isOriginalOnlyExt } from "./upload-validation";
 import type { VideoJobStore } from "./video/queue-store";
 
 export interface DeleteAssetResult {
@@ -98,13 +99,21 @@ export async function deleteAssetCompletely(
     // Step 4: Delete original file and cloud cache (if using cloud storage)
     if (storage) {
       try {
-        // Delete cloud cached transformations
-        result.cloudCacheFilesDeleted =
-          await storage.deleteAllCachedTransformations(filePath);
-        logger.debug(
-          { filePath, count: result.cloudCacheFilesDeleted },
-          "Deleted cloud cache files",
-        );
+        // Delete cloud cached transformations. Finding them means listing every
+        // object under cache/ and reading each one's metadata, so the cost grows
+        // with the whole bucket's cache, not with this file (15 s+ on a real
+        // bucket). Types only ever served as originals (pdf, enc, audio, 3D)
+        // never get a cached variant, so there is nothing to look for.
+        if (isOriginalOnlyExt(path.extname(filePath).slice(1))) {
+          logger.debug({ filePath }, "Original-only type, no cached variants");
+        } else {
+          result.cloudCacheFilesDeleted =
+            await storage.deleteAllCachedTransformations(filePath);
+          logger.debug(
+            { filePath, count: result.cloudCacheFilesDeleted },
+            "Deleted cloud cache files",
+          );
+        }
 
         // Delete the original file from cloud storage
         await storage.deleteOriginal(filePath);

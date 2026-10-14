@@ -151,6 +151,14 @@ test("a bare audio/3D URL streams the original with its real content-type", asyn
   });
   assert.ok(wav.stream, "wav original should be streamed");
   assert.equal(wav.contentType, "audio/wav");
+
+  const pdf = await service.transform({
+    path: "/t/docs/contract.pdf",
+    userAgent: "",
+    context: {} as any,
+  });
+  assert.ok(pdf.stream, "pdf original should be streamed");
+  assert.equal(pdf.contentType, "application/pdf");
 });
 
 test("transform params on a non-transformable type 400 instead of serving or erroring", async () => {

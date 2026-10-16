@@ -4,7 +4,6 @@ import {
   ALLOWED_UPLOAD_TYPES,
   allowedUploadExtensions,
   contentTypeForExt,
-  ENCRYPTED_FILE_MARKER,
   isDownloadOnlyExt,
   isOriginalOnlyExt,
   stripUrlHostile,
@@ -202,22 +201,16 @@ test("an extension with no signature is left to the whitelist", () => {
   assert.ok(validateUploadContent("notes.txt", body("hello")));
 });
 
-test("encrypted files are accepted only with the marker, and only as downloads", () => {
+test("encrypted files are accepted as bare ciphertext, and only as downloads", () => {
   assert.ok(validateUploadFileType("contract.pdf.enc", "application/octet-stream"));
   assert.ok(!validateUploadFileType("contract.pdf.enc", "application/pdf"));
   assert.equal(contentTypeForExt("enc"), "application/octet-stream");
 
+  // ciphertext has no signature: any content passes, the extension and
+  // octet-stream mime are what gate it
   const ciphertext = Buffer.from([0x8f, 0x12, 0xa0, 0x00, 0x77, 0xfe]);
-  assert.ok(
-    validateUploadContent(
-      "contract.pdf.enc",
-      Buffer.concat([Buffer.from(ENCRYPTED_FILE_MARKER, "latin1"), ciphertext]),
-    ),
-  );
-  // bare ciphertext, markup or a plain pdf renamed to .enc are all rejected
-  assert.ok(!validateUploadContent("contract.pdf.enc", ciphertext));
-  assert.ok(!validateUploadContent("evil.enc", body("<html><body>")));
-  assert.ok(!validateUploadContent("plain.pdf.enc", body("%PDF-1.7")));
+  assert.ok(validateUploadContent("contract.pdf.enc", ciphertext));
+  assert.ok(validateUploadContent("contract.enc", Buffer.from([0xff, 0xd8, 0xff, 0x01])));
 
   assert.ok(isDownloadOnlyExt("enc"));
   assert.ok(isDownloadOnlyExt("ENC"));

@@ -67,14 +67,6 @@ const jsonObject = (head: Buffer): boolean => {
   return text.trimStart().startsWith("{");
 };
 
-/**
- * Prefix every encrypted (.enc) upload must start with, followed by the
- * ciphertext. Ciphertext has no signature of its own, so without a marker the
- * content check could not tell an encrypted file from any other payload
- * renamed to .enc. The client adds it before upload and strips it on read.
- */
-export const ENCRYPTED_FILE_MARKER = "OPNENC1\0";
-
 const MEDIA_TYPES: readonly MediaType[] = [
   // Images
   { ext: "jpg", aliases: ["jpeg"], contentType: "image/jpeg", uploadMimes: ["image/jpeg"],
@@ -122,11 +114,13 @@ const MEDIA_TYPES: readonly MediaType[] = [
   // Documents (stored + delivered as originals)
   { ext: "pdf", contentType: "application/pdf", uploadMimes: ["application/pdf"],
     matches: (h) => marker(h, 0, "%PDF-") },
-  // Encrypted files: ciphertext encrypted by the client, stored and delivered
-  // untouched. Openinary never decrypts or inspects it beyond the marker.
+  // Encrypted files: bare ciphertext encrypted by the client, stored and
+  // delivered untouched. Ciphertext has no signature to check, so any content
+  // is accepted - safe because .enc is only ever served as an octet-stream
+  // attachment, and only to a valid API key or session.
   { ext: "enc", contentType: "application/octet-stream",
     uploadMimes: ["application/octet-stream"], downloadOnly: true,
-    matches: (h) => marker(h, 0, ENCRYPTED_FILE_MARKER) },
+    matches: () => true },
 ];
 
 const CONTENT_TYPE_BY_EXT: Readonly<Record<string, string>> = Object.fromEntries(

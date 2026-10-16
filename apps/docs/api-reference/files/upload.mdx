@@ -29,7 +29,7 @@ curl -X POST http://localhost:3000/upload \
 
 **Allowed types:** JPEG, PNG, WebP, AVIF, GIF, HEIC/HEIF, PSD, MP4, MOV, WebM, WAV, MP3, OGG, GLB, glTF, PDF, encrypted files (`.enc`)
 
-**Encrypted files:** encrypt on your side, prefix the ciphertext with the 8-byte marker `OPNENC1\0`, and upload it as `application/octet-stream` with a `.enc` name (e.g. `contract.pdf.enc`). The marker is checked like any other file signature; strip it again after downloading. See [pass-through formats](/api-reference/media/transform#pass-through-formats) for how they are delivered.
+**Encrypted files:** encrypt on your side and upload the ciphertext as `application/octet-stream` with a `.enc` name (e.g. `contract.pdf.enc`). Openinary stores the bytes untouched and never inspects or decrypts them. See [pass-through formats](/api-reference/media/transform#pass-through-formats) for how they are delivered.
 
 **Max size per file:** configurable via `MAX_FILE_SIZE_MB`, default 50 MB
 

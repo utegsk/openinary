@@ -36,6 +36,12 @@ services:
       - VIDEO_JOB_CLEANUP_HOURS=${VIDEO_JOB_CLEANUP_HOURS:-24}
       - VIDEO_WORKER_POLL_INTERVAL_MS=${VIDEO_WORKER_POLL_INTERVAL_MS:-1000}
       - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
+      # Rate limits. camasys calls with one API key from one IP, so the defaults (100/min) lock it out
+      - API_KEY_RATE_LIMIT_ENABLED=${API_KEY_RATE_LIMIT_ENABLED:-true}
+      - API_KEY_RATE_LIMIT_MAX=${API_KEY_RATE_LIMIT_MAX:-100}
+      - API_KEY_RATE_LIMIT_WINDOW_MS=${API_KEY_RATE_LIMIT_WINDOW_MS:-60000}
+      - PUBLIC_RATE_LIMIT_MAX=${PUBLIC_RATE_LIMIT_MAX:-100}
+      - PUBLIC_RATE_LIMIT_WINDOW_MS=${PUBLIC_RATE_LIMIT_WINDOW_MS:-60000}
       # S3-compatible storage (Cloudflare R2). Leave empty to store on the public-files volume.
       - STORAGE_REGION=${STORAGE_REGION:-auto}
       - STORAGE_ACCESS_KEY_ID=${STORAGE_ACCESS_KEY_ID:-}

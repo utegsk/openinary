@@ -414,11 +414,14 @@ export const auth = betterAuth({
       keyExpiration: {
         maxExpiresIn: 3650, // 10 years maximum
       },
-      // Rate limiting configuration
+      // Rate limiting configuration. Disabling it here skips the check for every key,
+      // including keys created earlier with rateLimitEnabled stored as true.
+      // The window only resets after a full window with no requests, so a single
+      // busy server-to-server key gets locked out (401) under steady traffic.
       rateLimit: {
-        enabled: true,
-        timeWindow: 60000, // 1 minute
-        maxRequests: 100,
+        enabled: process.env.API_KEY_RATE_LIMIT_ENABLED !== "false",
+        timeWindow: parseInt(process.env.API_KEY_RATE_LIMIT_WINDOW_MS || "60000", 10),
+        maxRequests: parseInt(process.env.API_KEY_RATE_LIMIT_MAX || "100", 10),
       },
     }),
   ],

@@ -20,7 +20,7 @@ const rateLimitStore = new Map<string, RateLimitEntry>();
  * Configuration for public rate limiting
  * Can be overridden via environment variables
  */
-const RATE_LIMIT_MAX = parseInt(process.env.PUBLIC_RATE_LIMIT_MAX || "100", 10);
+const RATE_LIMIT_MAX = parseInt(process.env.PUBLIC_RATE_LIMIT_MAX || "5000", 10);
 const RATE_LIMIT_WINDOW_MS = parseInt(process.env.PUBLIC_RATE_LIMIT_WINDOW_MS || "60000", 10);
 
 /**
@@ -82,7 +82,7 @@ function isExcludedPath(path: string): boolean {
  * with a 429 status code.
  * 
  * Configuration:
- * - PUBLIC_RATE_LIMIT_MAX: Maximum requests per window (default: 100)
+ * - PUBLIC_RATE_LIMIT_MAX: Maximum requests per window (default: 5000)
  * - PUBLIC_RATE_LIMIT_WINDOW_MS: Time window in milliseconds (default: 60000 = 1 minute)
  * 
  * Headers returned:

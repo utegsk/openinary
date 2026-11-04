@@ -1,6 +1,6 @@
 {
   "name": "openinary",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Release manifest of the utegsk Openinary image (docker/full.Dockerfile), read by the just-github-actions-n-workflows toolkit. Not a workspace package.",
   "properties": {

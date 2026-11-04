@@ -1,13 +1,8 @@
 services:
   openinary:
-    image: utegsk/openinary:dokploy
-    pull_policy: build
-    build:
-      context: .
-      dockerfile: docker/full.Dockerfile
-      args:
-        NEXT_PUBLIC_API_BASE_URL: /api
-        IMAGE_TAG: ${IMAGE_TAG:-latest}
+    # Built in CI (publish-docker-on-tag.yml), Dokploy only pulls it. deploy.yml writes the
+    # released version into DOCKER_OPENINARY_IMAGE_TAG in the compose env before redeploying.
+    image: ghcr.io/utegsk/openinary/openinary:${DOCKER_OPENINARY_IMAGE_TAG:?DOCKER_OPENINARY_IMAGE_TAG is required}
     restart: unless-stopped
     expose:
       - "3000"

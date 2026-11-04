@@ -1,0 +1,36 @@
+{
+  "ref": "@justanarthur/just-github-actions-n-workflows@1.4.2",
+  "installedAt": "2026-11-04T08:06:27.896Z",
+  "workflows": {
+    "bump-version.yml": {
+      "name": "bump-version",
+      "file": "bump-version.yml",
+      "ref": "@justanarthur/just-github-actions-n-workflows@1.4.2",
+      "installedAt": "2026-11-04T08:06:27.896Z"
+    },
+    "publish-docker-on-tag.yml": {
+      "name": "publish-docker-on-tag",
+      "file": "publish-docker-on-tag.yml",
+      "ref": "@justanarthur/just-github-actions-n-workflows@1.4.2",
+      "installedAt": "2026-11-04T08:06:27.896Z"
+    },
+    "deploy.yml": {
+      "name": "deploy",
+      "file": "deploy.yml",
+      "ref": "@justanarthur/just-github-actions-n-workflows@1.4.2",
+      "installedAt": "2026-11-04T08:06:27.896Z"
+    },
+    "deploy-docker-compose.yml": {
+      "name": "deploy-docker-compose",
+      "file": "deploy-docker-compose.yml",
+      "ref": "@justanarthur/just-github-actions-n-workflows@1.4.2",
+      "installedAt": "2026-11-04T08:06:27.896Z"
+    },
+    "deploy-on-release.yml": {
+      "name": "deploy-on-release",
+      "file": "deploy-on-release.yml",
+      "ref": "@justanarthur/just-github-actions-n-workflows@1.4.2",
+      "installedAt": "2026-11-04T08:06:27.896Z"
+    }
+  }
+}

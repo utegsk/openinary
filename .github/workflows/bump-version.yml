@@ -1,0 +1,159 @@
+# bump-version.yml
+# ---
+# auto-bumps manifest versions using conventional commits.
+#
+# copy this file into your repo's `.github/workflows/` and adjust
+# the `push.branches` trigger to match your default branch.
+#
+# can also be called as a reusable workflow from another workflow:
+#
+#   jobs:
+#     bump:
+#       uses: justAnArthur/just-github-actions-n-workflows/.github/workflows/bump-version.yml@7c64d65cadc5247c513b680f8aa4f3b1b04381ad
+#       with:
+#         bump_type: "minor:canary"
+#
+# the push trigger only covers `main`. a repo that releases from other
+# branches keeps this file as installed and calls it from a small workflow
+# of its own (not overwritten by `update`); called from a push, it bumps
+# from the pushed commits and pushes the bump commit to the pushed branch:
+#
+#   name: bump-version-on-push
+#   on: { push: { branches: [ canary, 'versions/**' ] } }
+#   permissions: { contents: write, packages: write, actions: write }
+#   jobs:
+#     bump: { uses: ./.github/workflows/bump-version.yml, secrets: inherit }
+#
+# after a stable promotion (bump_to_calculated_stable) the ghcr.io images of
+# the promoted prerelease channel and major (e.g. 5.x canary) are deleted;
+# other channels and majors (6.0.0-beta.4) stay.
+#
+# release tags are pushed with GITHUB_TOKEN, and GitHub never starts
+# workflows from pushes made with that token. so after tagging, this
+# workflow dispatches every installed workflow whose `push.tags` filter
+# matches a new tag (publish-npm-on-tag, publish-docker-on-tag,
+# release-on-tag, deploy-vercel-on-tag, and copies of them) on the tag
+# ref, with the tag as their `tag` input. that's why it needs
+# `actions: write` — a reusable-workflow caller must grant it too.
+#
+# required secrets:
+#   (none — uses the auto-provided GITHUB_TOKEN)
+#   GH_TOKEN — optional PAT for private packages / cross-repo registry access;
+#              deletes the prerelease images instead of GITHUB_TOKEN when set
+# ---
+
+# toolkit-ref: @justanarthur/just-github-actions-n-workflows@1.4.2
+name: bump-version
+run-name: >-
+  ${{
+    github.event_name == 'workflow_dispatch'
+      && format('bump-version (manual) — type={0}, stable={1}',
+           inputs.bump_type || 'auto',
+           inputs.bump_to_calculated_stable || 'false')
+      || format('bump-version (auto) — {0}',
+           github.event.head_commit.message || github.ref_name)
+  }}
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: >
+          version bump type.
+          append `:<channel>` for prerelease
+          (e.g. "minor:canary", "patch:stable", "minor:beta").
+        type: string
+        required: false
+        default: ""
+      bump_to_calculated_stable:
+        description: "promote current prerelease to stable based on commit history"
+        type: string
+        required: false
+        default: "false"
+      bump_manifest_names:
+        description: "comma-separated manifest names to bump (empty = all)"
+        type: string
+        required: false
+        default: ""
+      bump_prerelease_channel:
+        description: >
+          prerelease channel label (e.g. "canary", "beta", "alpha", "rc").
+          defaults to "canary" when omitted.
+        type: string
+        required: false
+        default: "canary"
+  workflow_call:
+    inputs:
+      bump_type:
+        type: string
+        required: false
+        default: ""
+      bump_to_calculated_stable:
+        type: string
+        required: false
+        default: "false"
+      bump_manifest_names:
+        type: string
+        required: false
+        default: ""
+      bump_prerelease_channel:
+        type: string
+        required: false
+        default: "canary"
+    secrets:
+      GH_TOKEN:
+        description: "optional PAT for private packages / cross-repo registry access (falls back to GITHUB_TOKEN)"
+        required: false
+
+permissions:
+  contents: write
+  packages: write
+  actions: write
+
+jobs:
+  bump-version:
+    runs-on: ${{ fromJSON(vars.JUSTACTIONS_RUNS_ON || '"ubuntu-latest"') }}
+    timeout-minutes: 15
+    # under workflow_call, event_name and head_commit are the caller's (e.g. push)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !contains(github.event.head_commit.message, '[skip bump]')
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: "true"
+          lfs: true
+
+      - name: Fetch all tags and history
+        uses: justAnArthur/just-github-actions-n-workflows/actions/fetch-tags@7c64d65cadc5247c513b680f8aa4f3b1b04381ad
+
+      - name: Configure git user
+        id: git_user
+        uses: justAnArthur/just-github-actions-n-workflows/actions/configure-git-user@7c64d65cadc5247c513b680f8aa4f3b1b04381ad
+        with:
+          mode: ${{ github.event_name == 'push' && 'push' || 'dispatch' }}
+
+      - name: Bump version
+        id: bump
+        uses: justAnArthur/just-github-actions-n-workflows/actions/bump-version@7c64d65cadc5247c513b680f8aa4f3b1b04381ad
+        with:
+          bump_to_calculated_stable: ${{ inputs.bump_to_calculated_stable || 'false' }}
+          bump_type_and_channel: ${{ inputs.bump_type || '' }}
+          bump_manifest_names: ${{ inputs.bump_manifest_names || '' }}
+          prerelease_channel: ${{ inputs.bump_prerelease_channel || 'canary' }}
+          github_token: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+          github_event: ${{ toJson(github.event) }}
+          co_author_name: ${{ steps.git_user.outputs.co_author_name }}
+          co_author_email: ${{ steps.git_user.outputs.co_author_email }}
+
+      - name: Dispatch tag-triggered workflows
+        if: ${{ !cancelled() && steps.bump.outputs.tags != '' }}
+        uses: justAnArthur/just-github-actions-n-workflows/actions/dispatch-tag-workflows@7c64d65cadc5247c513b680f8aa4f3b1b04381ad
+        with:
+          tags: ${{ steps.bump.outputs.tags }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}

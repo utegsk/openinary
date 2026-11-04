@@ -86,7 +86,9 @@ RUN pnpm --filter web build
 FROM node:20-slim
 # Runtime args only - will be overridden by docker-compose environment
 ARG NEXT_PUBLIC_API_BASE_URL="/api"
-ARG IMAGE_TAG="latest"
+# publish-docker-on-tag.yml passes the release version as SANITIZED_IMAGE_TAG
+ARG SANITIZED_IMAGE_TAG=""
+ARG IMAGE_TAG="${SANITIZED_IMAGE_TAG:-latest}"
 
 # Install nginx, ffmpeg, supervisor, cron, sqlite3 and jemalloc for process management
 # jemalloc replaces glibc malloc to avoid RSS bloat from arena fragmentation under

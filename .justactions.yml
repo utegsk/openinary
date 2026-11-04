@@ -1,0 +1,27 @@
+# Settings for the just-github-actions-n-workflows toolkit (bump-version.yml,
+# publish-docker-on-tag.yml, deploy.yml, deploy-on-release.yml).
+# Reference: https://github.com/justAnArthur/just-github-actions-n-workflows#settings-file
+#
+# The only released module is "openinary" (docker/package.json): commits scoped
+# openinary/docker/dokploy bump it, and the bump publishes
+# ghcr.io/utegsk/openinary/openinary:<version> from docker/full.Dockerfile.
+# The upstream workspace packages (core, ui, cloud, ...) have no dockerfilePath,
+# so a bump of one of them tags it without building anything.
+deploy:
+  dokploy:
+    url: https://dokploy.uteg.sk
+  targets:
+    # Dokploy compose "openinary" (openinary.uteg.sk, used by camasys prod);
+    # every stable release is deployed here once its image is on ghcr.io
+    openinary.uteg.sk:
+      driver: dokploy
+      channel: stable
+      dokploy:
+        compose_id: 6dSnunAZWE1D8BPqMfoPF
+
+modules:
+  overrides:
+    - name: openinary
+      docker:
+        build_args:
+          NEXT_PUBLIC_API_BASE_URL: /api

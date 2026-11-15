@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // persistent dev cache writes GBs to .next/dev/cache; keep off
+    turbopackFileSystemCacheForDev: false,
+  },
   images: {
     // Optimized images (/_next/image) had no Cache-Control header on Cloudflare
     minimumCacheTTL: 31536000,

@@ -2,6 +2,10 @@ import { withEnvStyles } from "env.style";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // persistent dev cache writes GBs to .next/dev/cache; keep off
+    turbopackFileSystemCacheForDev: false,
+  },
   // The dashboard reads NEXT_PUBLIC_SERVER_URL in a dozen places and asserts it
   // non-null, but it only ever lived in .env.production, which is gitignored -
   // so a fresh clone of this repo could not run `pnpm build`: prerendering
